@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DARYL: THE VIDEO GAME</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128222;</text></svg>">
+<style>
+  :root{
+    --bg:#11141b;
+    --wall:#2b3444;
+    --ink:#e9edf5;
+    --dim:#8e9aad;
+    --deal:#48c98a;
+    --anx:#f0913c;
+    --harm:#e8749b;
+    --comp:#5aa9f0;
+    --card:#1c2230;
+    --line:#333d4f;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:#07090d;overflow:hidden;
+    font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
+    color:var(--ink);-webkit-font-smoothing:antialiased;user-select:none}
+  #fit{position:fixed;inset:0;overflow:hidden}
+  /* fixed 1280x720 play field, centred and scaled to whatever the window is */
+  #stage{position:absolute;top:50%;left:50%;width:1280px;height:720px;background:var(--bg);
+    overflow:hidden;transform-origin:center center;box-shadow:0 30px 90px rgba(0,0,0,.7)}
+  canvas{position:absolute;inset:0;width:1280px;height:720px}
+
+  /* ---------- HUD ---------- */
+  #hud{position:absolute;left:0;top:0;width:1280px;height:64px;z-index:20;
+    background:linear-gradient(#151a24,#10141c);border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:18px;padding:0 16px}
+  #clock{font-size:22px;font-weight:800;letter-spacing:1px;min-width:118px;
+    font-variant-numeric:tabular-nums}
+  #clock small{display:block;font-size:9px;letter-spacing:2.5px;color:var(--dim);font-weight:700}
+  #meters{display:flex;gap:14px;flex:1}
+  .meter{flex:1;max-width:230px}
+  .meter .lab{font-size:9px;letter-spacing:1.6px;font-weight:800;color:var(--dim);
+    margin-bottom:4px;white-space:nowrap;display:flex;justify-content:space-between}
+  .meter .lab b{color:var(--ink);font-weight:800}
+  .track{height:11px;background:#0c1017;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .fill{height:100%;width:0%;border-radius:5px;transition:width .25s ease}
+  .meter.warn .track{animation:pulse .6s infinite}
+  @keyframes pulse{50%{box-shadow:0 0 0 3px rgba(255,90,90,.35)}}
+  #mute{background:#1c2230;color:var(--dim);border:1px solid var(--line);border-radius:6px;
+    padding:7px 10px;font-size:10px;font-weight:800;letter-spacing:1.2px;cursor:pointer}
+  #mute:hover{color:var(--ink)}
+
+  /* ---------- work cards ---------- */
+  /* top/gap are tuned so a full stack clears the phone; see spawnCard */
+  #work{position:absolute;right:14px;top:72px;width:326px;z-index:15;
+    display:flex;flex-direction:column;gap:7px}
+  .wcard{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--comp);
+    border-radius:8px;padding:8px 11px 9px;box-shadow:0 8px 22px rgba(0,0,0,.45);
+    animation:slide .28s cubic-bezier(.2,1.4,.4,1)}
+  @keyframes slide{from{transform:translateX(60px);opacity:0}}
+  .wcard.dying{animation:out .3s forwards}
+  @keyframes out{to{transform:translateX(70px) scale(.9);opacity:0}}
+  .wcard .tag{font-size:8.5px;letter-spacing:1.8px;font-weight:800;color:var(--comp);
+    display:flex;justify-content:space-between}
+  .wcard h4{font-size:13px;margin:4px 0 2px;line-height:1.22;letter-spacing:.2px}
+  .wcard p{font-size:11px;color:var(--dim);line-height:1.35}
+  .wcard .bar{height:3px;background:#0c1017;border-radius:2px;margin-top:7px;overflow:hidden}
+  .wcard .bar i{display:block;height:100%;background:var(--comp);width:100%}
+  .wcard button{margin-top:7px;width:100%;background:var(--comp);color:#08101c;border:0;
+    border-radius:6px;padding:7px;font-size:10.5px;font-weight:900;letter-spacing:1.3px;cursor:pointer}
+  .wcard button:hover{filter:brightness(1.12)}
+  .wcard .opts{display:flex;flex-direction:column;gap:4px;margin-top:7px}
+  .wcard .opts button{margin:0;background:#27303f;color:var(--ink);text-align:left;padding:6px 9px;
+    letter-spacing:.7px;font-size:10px}
+  .wcard .opts button:hover{background:#33405a}
+  .wcard.michael{border-left-color:var(--deal)}
+  .wcard.michael .tag,.wcard.michael .bar i{color:var(--deal);background:var(--deal)}
+  .wcard.michael .tag{background:none}
+  .wcard.michael button{background:var(--deal)}
+  .wcard.urgent{border-left-color:#f2564f}
+  .wcard.urgent .tag{color:#f2564f}
+  .wcard.urgent .bar i{background:#f2564f}
+
+  /* ---------- personal phone ---------- */
+  #phone{position:absolute;right:40px;bottom:18px;width:196px;z-index:16;
+    background:#0c0f15;border:3px solid #2c3444;border-radius:20px;padding:12px 12px 11px;
+    box-shadow:0 14px 34px rgba(0,0,0,.6);text-align:center}
+  #phone.ring{animation:buzz .35s infinite}
+  @keyframes buzz{0%,100%{transform:translate(0,0) rotate(0)}
+    25%{transform:translate(-3px,1px) rotate(-1.1deg)}
+    75%{transform:translate(3px,-1px) rotate(1.1deg)}}
+  #phone .who{font-size:8.5px;letter-spacing:2px;color:var(--anx);font-weight:800}
+  #phone .name{font-size:15.5px;font-weight:900;margin:5px 0 2px;line-height:1.12}
+  #phone .sub{font-size:9.5px;color:var(--dim);min-height:22px;line-height:1.28}
+  #phone .btns{display:flex;gap:7px;margin-top:8px}
+  #phone .btns button{flex:1;border:0;border-radius:7px;padding:8px 0;font-size:9.5px;
+    font-weight:900;letter-spacing:1.1px;cursor:pointer}
+  #phone .ans{background:var(--deal);color:#062015}
+  #phone .dec{background:#3a2630;color:#e6a8b4}
+  #phone .btns button:hover{filter:brightness(1.15)}
+  #phone .ringbar{height:3px;background:#1a1f2a;border-radius:2px;margin-top:7px;overflow:hidden}
+  #phone .ringbar i{display:block;height:100%;background:var(--anx);width:100%}
+  #phone.oncall{border-color:var(--deal)}
+
+  /* ---------- fiancee dialogue ---------- */
+  /* sits below his eyeline on purpose: watching him react is the point */
+  #wifebox{position:absolute;left:226px;top:374px;width:432px;z-index:17}
+  #wifebox .bub{position:relative;background:#f4f1ea;color:#181b22;border-radius:14px;
+    padding:14px 16px;box-shadow:0 12px 30px rgba(0,0,0,.5);animation:pop .25s cubic-bezier(.2,1.5,.4,1)}
+  @keyframes pop{from{transform:scale(.9) translateY(8px);opacity:0}}
+  #wifebox .bub:after{content:"";position:absolute;left:-16px;top:26px;border:9px solid transparent;
+    border-right-color:#f4f1ea;border-left:0}
+  #wifebox .nm{font-size:9px;letter-spacing:2px;font-weight:900;color:#9b6b86}
+  #wifebox .q{font-size:17px;font-weight:700;margin-top:5px;line-height:1.3}
+  #wifebox .opts{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:10px}
+  #wifebox .opts button{background:#1c2230;color:var(--ink);border:1px solid var(--line);
+    border-radius:7px;padding:10px;font-size:11px;font-weight:800;letter-spacing:.7px;
+    cursor:pointer;text-align:left;line-height:1.25}
+  #wifebox .opts button:hover{background:#2b3446;border-color:#4a5871}
+  #wifebox .timer{height:3px;background:#0c1017;border-radius:2px;margin-top:8px;overflow:hidden}
+  #wifebox .timer i{display:block;height:100%;background:var(--harm);width:100%}
+
+  /* ---------- toasts ---------- */
+  #toasts{position:absolute;left:16px;bottom:16px;width:400px;z-index:18;
+    display:flex;flex-direction:column-reverse;gap:7px;pointer-events:none}
+  .toast{background:rgba(12,16,23,.94);border:1px solid var(--line);border-left:3px solid var(--dim);
+    border-radius:7px;padding:9px 12px;font-size:12px;line-height:1.35;
+    animation:tin .25s ease, tout .4s ease forwards 3.4s}
+  .toast b{letter-spacing:.4px}
+  @keyframes tin{from{transform:translateX(-30px);opacity:0}}
+  @keyframes tout{to{opacity:0;transform:translateY(6px)}}
+  .toast.good{border-left-color:var(--deal)}
+  .toast.bad{border-left-color:#f2564f}
+  .toast.house{border-left-color:var(--anx)}
+  .toast.dog{border-left-color:#d9a441}
+
+  /* ---------- screens ---------- */
+  .screen{position:absolute;inset:0;z-index:40;background:rgba(7,9,13,.96);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:40px}
+  .hidden{display:none!important}
+  #title h1{font-size:66px;font-weight:900;letter-spacing:-1px;line-height:.95}
+  #title h1 span{color:var(--deal)}
+  #title .sub{font-size:14px;letter-spacing:5px;color:var(--dim);margin-top:12px;font-weight:800}
+  #title .blurb{max-width:640px;margin-top:26px;font-size:14.5px;line-height:1.75;color:#b9c3d4}
+  #title .blurb b{color:var(--ink)}
+  .keys{display:flex;gap:26px;margin-top:24px;font-size:11px;color:var(--dim);letter-spacing:1.4px}
+  .keys b{color:var(--ink);display:block;font-size:13px;margin-bottom:3px;letter-spacing:.6px}
+  .bigbtn{margin-top:32px;background:var(--deal);color:#05170e;border:0;border-radius:10px;
+    padding:17px 46px;font-size:16px;font-weight:900;letter-spacing:3px;cursor:pointer}
+  .bigbtn:hover{filter:brightness(1.12)}
+  .bigbtn.alt{background:#242c3a;color:var(--ink);padding:13px 30px;font-size:12px;letter-spacing:2px}
+
+  #endscreen .etitle{font-size:52px;font-weight:900;letter-spacing:-.5px;line-height:1.05}
+  #endscreen .esub{font-size:15px;color:var(--dim);margin-top:14px;max-width:560px;line-height:1.6}
+  #endline{margin-top:34px;display:flex;flex-direction:column;gap:14px;align-items:center}
+  #endline div{font-size:24px;font-weight:900;letter-spacing:2.5px;opacity:0;
+    transform:translateY(10px);color:var(--deal)}
+  /* resting state is visible; the animation only eases it in, so a dropped
+     frame or a throttled tab can never leave the payoff unreadable */
+  #endline div.show{opacity:1;transform:none;animation:reveal .55s ease}
+  @keyframes reveal{from{opacity:0;transform:translateY(10px)}}
+  #stats{margin-top:26px;font-size:11.5px;color:var(--dim);letter-spacing:1.4px;line-height:2}
+
+  /* the final gag */
+  #cutscene{position:absolute;inset:0;z-index:60;background:#000;display:flex;
+    align-items:center;justify-content:center}
+  #notif{width:340px;background:#151a24;border:1px solid #2e3849;border-radius:14px;
+    padding:16px 18px;text-align:left;box-shadow:0 20px 60px rgba(0,0,0,.9);
+    animation:pop .4s cubic-bezier(.2,1.5,.4,1)}
+  #notif .hdr{font-size:9px;letter-spacing:2.4px;color:var(--dim);font-weight:800}
+  #notif .from{font-size:16px;font-weight:900;margin-top:8px}
+  #notif .msg{font-size:15px;color:#c6d0e0;margin-top:5px}
+  #fade{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;
+    transition:opacity 1.6s ease;z-index:61}
+  #replay{position:absolute;bottom:52px;left:50%;transform:translateX(-50%);z-index:62;opacity:0;
+    transition:opacity 1s ease}
+
+  #rotate{position:fixed;inset:0;background:#07090d;z-index:100;display:none;
+    align-items:center;justify-content:center;text-align:center;padding:30px;
+    font-size:16px;letter-spacing:2px;color:var(--dim);font-weight:800;line-height:1.8}
+  @media (max-aspect-ratio:1/1){#rotate{display:flex}}
+</style>
+</head>
+<body>
+<div id="fit">
+  <div id="stage">
+    <canvas id="scene" width="1280" height="720"></canvas>
+
+    <div id="hud">
+      <div id="clock">9:00 <small>MONDAY</small></div>
+      <div id="meters">
+        <div class="meter" data-k="deal"><div class="lab"><span>DEAL PROGRESS</span><b>0%</b></div>
+          <div class="track"><i class="fill" style="background:var(--deal)"></i></div></div>
+        <div class="meter" data-k="anxiety"><div class="lab"><span>HOUSE CLOSING ANXIETY</span><b>0%</b></div>
+          <div class="track"><i class="fill" style="background:var(--anx)"></i></div></div>
+        <div class="meter" data-k="harmony"><div class="lab"><span>WEDDING HARMONY</span><b>100%</b></div>
+          <div class="track"><i class="fill" style="background:var(--harm)"></i></div></div>
+        <div class="meter" data-k="composure"><div class="lab"><span>COMPOSURE</span><b>100%</b></div>
+          <div class="track"><i class="fill" style="background:var(--comp)"></i></div></div>
+      </div>
+      <button id="mute">SOUND ON</button>
+    </div>
+
+    <div id="work"></div>
+    <div id="phone" class="hidden"></div>
+    <div id="wifebox" class="hidden"></div>
+    <div id="toasts"></div>
+
+    <div id="title" class="screen">
+      <h1>DARYL<span>:</span><br>THE VIDEO GAME</h1>
+      <div class="sub">ONE WORKDAY &middot; ONE DEAL &middot; EVERYTHING ELSE</div>
+      <div class="blurb">
+        Daryl is closing on a house. Daryl is getting married. Until both of those happen,
+        Daryl works from a spare bedroom at his mother-in-law's, on a folding table,
+        beside four weeks of boxes. Get to <b>5:00 PM</b> with the deal closed, the realtor
+        called back, the fianc&eacute;e still speaking to you, and your composure intact.
+      </div>
+      <div class="keys">
+        <div><b>CLICK</b>work &amp; phone</div>
+        <div><b>CLICK THE DOGS</b>three times to stop the barking</div>
+        <div><b>ANSWER HER</b>carefully</div>
+      </div>
+      <button class="bigbtn" id="startBtn">CLOCK IN</button>
+    </div>
+
+    <div id="endscreen" class="screen hidden"></div>
+  </div>
+</div>
+<div id="rotate">TURN YOUR PHONE SIDEWAYS<br>DARYL NEEDS THE ROOM</div>
+<script src="game.js"></script>
+</body>
+</html>
